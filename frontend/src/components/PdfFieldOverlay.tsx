@@ -102,24 +102,46 @@ export function PdfFieldOverlay({ field, scale, onDelete, onMove, onValueChange,
       );
       break;
     case "CHECKBOX":
-      control = (
+      control = onValueChange ? (
         <div
           style={onDelete ? undefined : style}
           className="flex h-full w-full items-center justify-center"
         >
           <Checkbox
-            checked={onValueChange ? field.value === "true" : undefined}
-            defaultChecked={!onValueChange ? field.value === "true" : undefined}
-            onCheckedChange={onValueChange ? (checked) => onValueChange(checked ? "true" : "false") : undefined}
+            checked={field.value === "true"}
+            onCheckedChange={(checked) => onValueChange(String(!!checked))}
+            className="border-blue-400 data-[state=checked]:bg-blue-500"
+          />
+        </div>
+      ) : (
+        <div
+          style={style}
+          className="flex h-full w-full items-center justify-center"
+        >
+          <Checkbox
+            defaultChecked={field.value === "true"}
             className="border-blue-400 data-[state=checked]:bg-blue-500"
           />
         </div>
       );
       break;
     case "RADIO":
-      control = (
+      control = onValueChange ? (
         <div
           style={onDelete ? undefined : style}
+          className="flex h-full w-full items-center justify-center"
+        >
+          <input
+            type="radio"
+            name={field.name}
+            checked={field.value === "true"}
+            onChange={(e) => onValueChange(String(e.target.checked))}
+            className="h-3 w-3 accent-blue-500"
+          />
+        </div>
+      ) : (
+        <div
+          style={style}
           className="flex h-full w-full items-center justify-center"
         >
           <input
