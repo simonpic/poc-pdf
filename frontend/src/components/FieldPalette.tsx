@@ -1,11 +1,16 @@
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { Type, Square, Circle } from "lucide-react";
 import type { DragEvent } from "react";
 
 const FIELD_TYPES = [
-  { type: "TEXT", label: "Champ texte", icon: Type },
-  { type: "CHECKBOX", label: "Case a cocher", icon: Square },
-  { type: "RADIO", label: "Bouton radio", icon: Circle },
+  { type: "TEXT", label: "Champ texte", icon: Type, tip: "Glissez sur le PDF pour ajouter un champ de saisie" },
+  { type: "CHECKBOX", label: "Case a cocher", icon: Square, tip: "Glissez sur le PDF pour ajouter une case a cocher" },
+  { type: "RADIO", label: "Bouton radio", icon: Circle, tip: "Glissez sur le PDF pour ajouter un bouton radio" },
 ] as const;
 
 export function FieldPalette() {
@@ -20,16 +25,22 @@ export function FieldPalette() {
         <CardTitle className="text-sm">Champs</CardTitle>
       </CardHeader>
       <CardContent className="space-y-2">
-        {FIELD_TYPES.map(({ type, label, icon: Icon }) => (
-          <div
-            key={type}
-            draggable
-            onDragStart={(e) => handleDragStart(e, type)}
-            className="flex cursor-grab items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent active:cursor-grabbing"
-          >
-            <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-            {label}
-          </div>
+        {FIELD_TYPES.map(({ type, label, icon: Icon, tip }) => (
+          <Tooltip key={type}>
+            <TooltipTrigger asChild>
+              <div
+                draggable
+                onDragStart={(e) => handleDragStart(e, type)}
+                className="flex cursor-grab items-center gap-2 rounded-md border px-3 py-2 text-sm transition-colors hover:bg-accent active:cursor-grabbing"
+              >
+                <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                {label}
+              </div>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              <p>{tip}</p>
+            </TooltipContent>
+          </Tooltip>
         ))}
       </CardContent>
     </Card>

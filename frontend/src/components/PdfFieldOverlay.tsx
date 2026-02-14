@@ -1,4 +1,4 @@
-import { useRef, useCallback } from "react";
+import { useRef, useCallback, useState } from "react";
 import { Input } from "@/components/ui/input";
 import { Checkbox } from "@/components/ui/checkbox";
 import { GripVertical, X } from "lucide-react";
@@ -21,9 +21,10 @@ interface PdfFieldOverlayProps {
   onDelete?: () => void;
   onMove?: (pdfDx: number, pdfDy: number) => void;
   onValueChange?: (value: string) => void;
+  onNameChange?: (name: string) => void;
 }
 
-export function PdfFieldOverlay({ field, scale, onDelete, onMove, onValueChange }: PdfFieldOverlayProps) {
+export function PdfFieldOverlay({ field, scale, onDelete, onMove, onValueChange, onNameChange }: PdfFieldOverlayProps) {
   const cssX = field.x * scale;
   const cssY = (field.pageHeight - field.y - field.height) * scale;
   const cssWidth = field.width * scale;
@@ -31,6 +32,8 @@ export function PdfFieldOverlay({ field, scale, onDelete, onMove, onValueChange 
 
   const dragging = useRef(false);
   const startPos = useRef({ x: 0, y: 0 });
+  const [editingName, setEditingName] = useState(false);
+  const [nameValue, setNameValue] = useState(field.name);
 
   const handlePointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -60,6 +63,15 @@ export function PdfFieldOverlay({ field, scale, onDelete, onMove, onValueChange 
   const handlePointerUp = useCallback(() => {
     dragging.current = false;
   }, []);
+
+  const commitName = () => {
+    setEditingName(false);
+    if (onNameChange && nameValue.trim() && nameValue !== field.name) {
+      onNameChange(nameValue.trim());
+    } else {
+      setNameValue(field.name);
+    }
+  };
 
   const style: React.CSSProperties = {
     position: "absolute",
@@ -126,22 +138,55 @@ export function PdfFieldOverlay({ field, scale, onDelete, onMove, onValueChange 
   }
 
   return (
-    <div style={style} className="group">
+    <div style={style}>
+      {/* Editable label above the field */}
+      {onNameChange && (
+        <div className="absolute bottom-full left-0 mb-0.5">
+          {editingName ? (
+            <input
+              className="rounded border border-blue-400 bg-white px-1 text-[10px] leading-tight outline-none"
+              value={nameValue}
+              onChange={(e) => setNameValue(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") commitName();
+                if (e.key === "Escape") {
+                  setNameValue(field.name);
+                  setEditingName(false);
+                }
+              }}
+              autoFocus
+            />
+          ) : (
+            <span
+              className="cursor-pointer rounded bg-blue-500/80 px-1 py-px text-[10px] leading-tight text-white whitespace-nowrap"
+              onClick={() => {
+                setNameValue(field.name);
+                setEditingName(true);
+              }}
+            >
+              {field.name}
+            </span>
+          )}
+        </div>
+      )}
       {control}
+      {/* Always-visible drag handle */}
       <div
         onPointerDown={handlePointerDown}
         onPointerMove={handlePointerMove}
         onPointerUp={handlePointerUp}
-        className="absolute -top-3 left-1/2 hidden h-5 w-6 -translate-x-1/2 cursor-grab items-center justify-center rounded-t bg-blue-500 text-white shadow active:cursor-grabbing group-hover:flex"
+        className="absolute -top-3 left-1/2 flex h-4 w-5 -translate-x-1/2 cursor-grab items-center justify-center rounded-t bg-blue-500 text-white shadow opacity-60 hover:opacity-100 active:cursor-grabbing"
       >
-        <GripVertical className="h-3 w-3" />
+        <GripVertical className="h-2.5 w-2.5" />
       </div>
+      {/* Always-visible delete button */}
       <button
         type="button"
         onClick={onDelete}
-        className="absolute -top-2 -right-2 hidden h-4 w-4 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow group-hover:flex"
+        className="absolute -top-1.5 -right-1.5 flex h-3.5 w-3.5 items-center justify-center rounded-full bg-destructive text-destructive-foreground shadow opacity-60 hover:opacity-100"
       >
-        <X className="h-3 w-3" />
+        <X className="h-2.5 w-2.5" />
       </button>
     </div>
   );

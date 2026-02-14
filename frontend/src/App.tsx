@@ -1,24 +1,15 @@
-import { useState, useRef, useCallback, type DragEvent } from "react";
+import { useState, useRef, useCallback, useEffect, type DragEvent } from "react";
 import {
   Card,
-  CardHeader,
-  CardTitle,
-  CardDescription,
   CardContent,
 } from "@/components/ui/card";
-import {
-  Table,
-  TableHeader,
-  TableBody,
-  TableRow,
-  TableHead,
-  TableCell,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TooltipProvider } from "@/components/ui/tooltip";
 import { PdfFieldOverlay } from "@/components/PdfFieldOverlay";
 import { FieldPalette } from "@/components/FieldPalette";
+import { Upload, Download, FileText } from "lucide-react";
 
 interface PdfField {
   name: string;
@@ -76,12 +67,21 @@ function App() {
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null);
   const [generating, setGenerating] = useState(false);
+  const [activeTab, setActiveTab] = useState("preview");
+  const [dragOverPage, setDragOverPage] = useState<number | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const countersRef = useRef<Record<string, number>>({ TEXT: 0, CHECKBOX: 0, RADIO: 0 });
 
   const PDF_DPI = 72;
   const RENDER_DPI = 150;
   const BASE_SCALE = RENDER_DPI / PDF_DPI;
+
+  // Auto-switch to generated tab after generation
+  useEffect(() => {
+    if (generatedPdfUrl) {
+      setActiveTab("generated");
+    }
+  }, [generatedPdfUrl]);
 
   const handleImageLoad = useCallback(
     (pageIndex: number, e: React.SyntheticEvent<HTMLImageElement>) => {
@@ -131,6 +131,7 @@ function App() {
     setUploadedFile(file);
     if (generatedPdfUrl) URL.revokeObjectURL(generatedPdfUrl);
     setGeneratedPdfUrl(null);
+    setActiveTab("preview");
     countersRef.current = { TEXT: 0, CHECKBOX: 0, RADIO: 0 };
 
     const formData = new FormData();
@@ -179,17 +180,23 @@ function App() {
 
   const handleFileDragLeave = () => setDragOver(false);
 
-  const handlePageDragOver = (e: DragEvent<HTMLDivElement>) => {
+  const handlePageDragOver = (e: DragEvent<HTMLDivElement>, pageIndex: number) => {
     if (e.dataTransfer.types.includes("application/field-type")) {
       e.preventDefault();
       e.dataTransfer.dropEffect = "copy";
+      setDragOverPage(pageIndex);
     }
+  };
+
+  const handlePageDragLeave = () => {
+    setDragOverPage(null);
   };
 
   const handlePageDrop = (e: DragEvent<HTMLDivElement>, pageIndex: number) => {
     const fieldType = e.dataTransfer.getData("application/field-type") as CustomField["type"];
     if (!fieldType) return;
     e.preventDefault();
+    setDragOverPage(null);
 
     const img = e.currentTarget.querySelector("img");
     if (!img) return;
@@ -247,53 +254,58 @@ function App() {
     );
   }, []);
 
-  const typeBadge = (type: string) => {
-    switch (type) {
-      case "TEXT":
-        return <Badge variant="default">Texte</Badge>;
-      case "CHECKBOX":
-        return <Badge variant="secondary">Case a cocher</Badge>;
-      case "RADIO":
-        return <Badge variant="outline">Bouton radio</Badge>;
-      default:
-        return <Badge variant="default">{type}</Badge>;
-    }
-  };
+  const updateCustomFieldName = useCallback((id: string, name: string) => {
+    setCustomFields((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, name } : f)),
+    );
+  }, []);
 
   const showSidebar = status === "success" && result != null;
 
   return (
-    <div className="flex min-h-screen">
-      {showSidebar && (
-        <div className="w-[220px] shrink-0 border-r p-4">
-          <FieldPalette />
-        </div>
-      )}
-
-      <div className="min-w-0 flex-1 p-6">
-        <h1 className="mb-6 text-center text-3xl font-bold tracking-tight">
-          Extraction de champs PDF
-        </h1>
-
-        <div className={`mx-auto ${generatedPdfUrl ? "max-w-7xl" : "max-w-4xl"}`}>
-          <Card>
-            <CardContent>
-              <div
-                className={`cursor-pointer rounded-lg border-2 border-dashed p-10 text-center transition-colors ${
-                  dragOver
-                    ? "border-primary bg-primary/5 text-primary"
-                    : "border-muted-foreground/25 text-muted-foreground hover:border-primary hover:bg-primary/5 hover:text-primary"
-                }`}
-                onDrop={handleFileDrop}
-                onDragOver={handleFileDragOver}
-                onDragLeave={handleFileDragLeave}
-                onClick={() => fileInputRef.current?.click()}
+    <TooltipProvider>
+      <div className="flex min-h-screen">
+        {/* Sidebar with smooth transition */}
+        <div
+          className="shrink-0 border-r transition-all duration-300 overflow-hidden"
+          style={{ width: showSidebar ? 220 : 0 }}
+        >
+          <div className="w-[220px] p-4 flex flex-col gap-4">
+            <FieldPalette />
+            {customFields.length > 0 && (
+              <Button
+                className="w-full"
+                onClick={generatePdf}
+                disabled={generating}
               >
-                <p className="mb-3 text-lg">
-                  Glissez-deposez un PDF ici ou cliquez pour selectionner
-                </p>
-                <Button variant="outline" type="button" onClick={(e) => e.stopPropagation()}>
-                  Choisir un fichier
+                {generating ? "Generation..." : "Generer le PDF"}
+              </Button>
+            )}
+          </div>
+        </div>
+
+        <div className="min-w-0 flex-1 p-6">
+          <h1 className="mb-6 text-center text-3xl font-bold tracking-tight">
+            Editeur de formulaire PDF
+          </h1>
+
+          <div className="mx-auto max-w-4xl">
+            {/* Upload zone: compact after loading, full otherwise */}
+            {status === "success" && result ? (
+              <div className="mb-4 flex items-center gap-3 rounded-lg border bg-muted/50 px-4 py-2">
+                <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
+                <span className="truncate text-sm font-medium">{result.fileName}</span>
+                <span className="text-xs text-muted-foreground">
+                  ({result.totalFields} champ{result.totalFields > 1 ? "s" : ""})
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="ml-auto shrink-0"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <Upload className="mr-2 h-4 w-4" />
+                  Charger un autre PDF
                 </Button>
                 <input
                   ref={fileInputRef}
@@ -303,135 +315,129 @@ function App() {
                   hidden
                 />
               </div>
-            </CardContent>
-          </Card>
-
-          {status === "loading" && (
-            <p className="mt-6 text-center text-primary">Extraction en cours...</p>
-          )}
-
-          {status === "error" && (
-            <Alert variant="destructive" className="mt-6">
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {status === "success" && result && (
-            <Card className="mt-6">
-              <CardHeader>
-                <CardTitle>{result.fileName}</CardTitle>
-                <CardDescription>
-                  {result.totalFields} champ{result.totalFields > 1 ? "s" : ""} trouve
-                  {result.totalFields > 1 ? "s" : ""}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                {result.fields.length === 0 ? (
-                  <p className="text-muted-foreground">
-                    Aucun champ de formulaire detecte dans ce PDF.
-                  </p>
-                ) : (
-                  <div className="rounded-md border">
-                    <Table>
-                      <TableHeader>
-                        <TableRow>
-                          <TableHead>Nom</TableHead>
-                          <TableHead>Type</TableHead>
-                          <TableHead>Valeur</TableHead>
-                          <TableHead>Position</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {result.fields.map((field, i) => (
-                          <TableRow key={i}>
-                            <TableCell className="font-medium">{field.name}</TableCell>
-                            <TableCell>{typeBadge(field.type)}</TableCell>
-                            <TableCell>
-                              {field.value ?? (
-                                <span className="text-muted-foreground italic">vide</span>
-                              )}
-                            </TableCell>
-                            <TableCell>
-                              ({Math.round(field.x)}, {Math.round(field.y)})
-                            </TableCell>
-                          </TableRow>
-                        ))}
-                      </TableBody>
-                    </Table>
+            ) : (
+              <Card className="mb-4">
+                <CardContent>
+                  <div
+                    className={`cursor-pointer rounded-lg border-2 border-dashed p-10 text-center transition-colors ${
+                      dragOver
+                        ? "border-primary bg-primary/5 text-primary"
+                        : "border-muted-foreground/25 text-muted-foreground hover:border-primary hover:bg-primary/5 hover:text-primary"
+                    }`}
+                    onDrop={handleFileDrop}
+                    onDragOver={handleFileDragOver}
+                    onDragLeave={handleFileDragLeave}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <p className="mb-3 text-lg">
+                      Glissez-deposez un PDF ici ou cliquez pour selectionner
+                    </p>
+                    <Button variant="outline" type="button" onClick={(e) => e.stopPropagation()}>
+                      Choisir un fichier
+                    </Button>
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="application/pdf"
+                      onChange={handleFileChange}
+                      hidden
+                    />
                   </div>
-                )}
+                </CardContent>
+              </Card>
+            )}
 
-                <div className={`mt-6 ${generatedPdfUrl ? "grid grid-cols-2 gap-6" : ""}`}>
-                  <div>
-                    <h3 className="mb-2 text-lg font-semibold">PDF aplati</h3>
-                    <div className="space-y-4">
-                      {result.pagesBase64.map((page, i) => (
-                        <div
-                          key={i}
-                          className="relative"
-                          onDragOver={handlePageDragOver}
-                          onDrop={(e) => handlePageDrop(e, i)}
-                        >
-                          <img
-                            className="w-full rounded-md border"
-                            src={`data:image/png;base64,${page}`}
-                            alt={`Page ${i + 1}`}
-                            onLoad={(e) => handleImageLoad(i, e)}
-                          />
-                          {scales[i] != null &&
-                            result.fields
-                              .filter((f) => f.page === i)
-                              .map((field, j) => (
-                                <PdfFieldOverlay
-                                  key={`extracted-${j}`}
-                                  field={field}
-                                  scale={scales[i]}
-                                />
-                              ))}
-                          {scales[i] != null &&
-                            customFields
-                              .filter((f) => f.page === i)
-                              .map((field) => (
-                                <PdfFieldOverlay
-                                  key={field.id}
-                                  field={{ ...field, value: field.value }}
-                                  scale={scales[i]}
-                                  onDelete={() => deleteCustomField(field.id)}
-                                  onMove={(dx, dy) => moveCustomField(field.id, dx, dy)}
-                                  onValueChange={(v) => updateCustomFieldValue(field.id, v)}
-                                />
-                              ))}
-                        </div>
-                      ))}
-                    </div>
-                    {customFields.length > 0 && (
-                      <Button
-                        className="mt-4 w-full"
-                        onClick={generatePdf}
-                        disabled={generating}
-                      >
-                        {generating ? "Generation en cours..." : "Generer le PDF"}
-                      </Button>
-                    )}
-                  </div>
+            {status === "loading" && (
+              <p className="mt-6 text-center text-primary">Extraction en cours...</p>
+            )}
 
+            {status === "error" && (
+              <Alert variant="destructive" className="mt-6">
+                <AlertDescription>{error}</AlertDescription>
+              </Alert>
+            )}
+
+            {status === "success" && result && (
+              <Tabs value={activeTab} onValueChange={setActiveTab}>
+                <TabsList>
+                  <TabsTrigger value="preview">Apercu</TabsTrigger>
                   {generatedPdfUrl && (
-                    <div>
-                      <h3 className="mb-2 text-lg font-semibold">PDF genere</h3>
-                      <iframe
-                        src={generatedPdfUrl}
-                        className="h-[800px] w-full rounded-md border"
-                        title="PDF genere"
-                      />
-                    </div>
+                    <TabsTrigger value="generated">PDF genere</TabsTrigger>
                   )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
+                </TabsList>
+
+                <TabsContent value="preview" className="mt-4">
+                  <div className="space-y-4">
+                    {result.pagesBase64.map((page, i) => (
+                      <div
+                        key={i}
+                        className={`relative rounded-md transition-shadow ${
+                          dragOverPage === i
+                            ? "ring-2 ring-blue-400 ring-offset-2"
+                            : ""
+                        }`}
+                        onDragOver={(e) => handlePageDragOver(e, i)}
+                        onDragLeave={handlePageDragLeave}
+                        onDrop={(e) => handlePageDrop(e, i)}
+                      >
+                        <img
+                          className="w-full rounded-md border"
+                          src={`data:image/png;base64,${page}`}
+                          alt={`Page ${i + 1}`}
+                          onLoad={(e) => handleImageLoad(i, e)}
+                        />
+                        {scales[i] != null &&
+                          result.fields
+                            .filter((f) => f.page === i)
+                            .map((field, j) => (
+                              <PdfFieldOverlay
+                                key={`extracted-${j}`}
+                                field={field}
+                                scale={scales[i]}
+                              />
+                            ))}
+                        {scales[i] != null &&
+                          customFields
+                            .filter((f) => f.page === i)
+                            .map((field) => (
+                              <PdfFieldOverlay
+                                key={field.id}
+                                field={{ ...field, value: field.value }}
+                                scale={scales[i]}
+                                onDelete={() => deleteCustomField(field.id)}
+                                onMove={(dx, dy) => moveCustomField(field.id, dx, dy)}
+                                onValueChange={(v) => updateCustomFieldValue(field.id, v)}
+                                onNameChange={(name) => updateCustomFieldName(field.id, name)}
+                              />
+                            ))}
+                      </div>
+                    ))}
+                  </div>
+                </TabsContent>
+
+                {generatedPdfUrl && (
+                  <TabsContent value="generated" className="mt-4">
+                    <div className="mb-2 flex justify-end">
+                      <Button variant="outline" size="sm" asChild>
+                        <a href={generatedPdfUrl} download="formulaire.pdf">
+                          <Download className="mr-2 h-4 w-4" />
+                          Telecharger le PDF
+                        </a>
+                      </Button>
+                    </div>
+                    <iframe
+                      src={generatedPdfUrl}
+                      className="h-[800px] w-full rounded-md border"
+                      title="PDF genere"
+                    />
+                  </TabsContent>
+                )}
+              </Tabs>
+            )}
+          </div>
         </div>
       </div>
-    </div>
+    </TooltipProvider>
   );
 }
 
