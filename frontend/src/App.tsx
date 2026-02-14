@@ -72,6 +72,9 @@ function App() {
   const [dragOver, setDragOver] = useState(false);
   const [scales, setScales] = useState<Record<number, number>>({});
   const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [generatedPdfUrl, setGeneratedPdfUrl] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const countersRef = useRef<Record<string, number>>({ TEXT: 0, CHECKBOX: 0, RADIO: 0 });
 
@@ -88,11 +91,45 @@ function App() {
     [BASE_SCALE],
   );
 
+  const generatePdf = async () => {
+    if (!uploadedFile || customFields.length === 0) return;
+    setGenerating(true);
+
+    const formData = new FormData();
+    formData.append("file", uploadedFile);
+    formData.append(
+      "fields",
+      JSON.stringify(
+        customFields.map(({ type, name, x, y, width, height, page, pageHeight }) => ({
+          name, type, x, y, width, height, page, pageHeight,
+        })),
+      ),
+    );
+
+    try {
+      const response = await fetch("http://localhost:8080/api/pdf/add-fields", {
+        method: "POST",
+        body: formData,
+      });
+      if (!response.ok) throw new Error(`Erreur serveur: ${response.status}`);
+      const blob = await response.blob();
+      if (generatedPdfUrl) URL.revokeObjectURL(generatedPdfUrl);
+      setGeneratedPdfUrl(URL.createObjectURL(blob));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Erreur inconnue");
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   const uploadFile = async (file: File) => {
     setStatus("loading");
     setError("");
     setResult(null);
     setCustomFields([]);
+    setUploadedFile(file);
+    if (generatedPdfUrl) URL.revokeObjectURL(generatedPdfUrl);
+    setGeneratedPdfUrl(null);
     countersRef.current = { TEXT: 0, CHECKBOX: 0, RADIO: 0 };
 
     const formData = new FormData();
@@ -222,7 +259,7 @@ function App() {
           Extraction de champs PDF
         </h1>
 
-        <div className="mx-auto max-w-4xl">
+        <div className={`mx-auto ${generatedPdfUrl ? "max-w-7xl" : "max-w-4xl"}`}>
           <Card>
             <CardContent>
               <div
@@ -308,44 +345,68 @@ function App() {
                   </div>
                 )}
 
-                <h3 className="mt-6 mb-2 text-lg font-semibold">PDF aplati</h3>
-                <div className="space-y-4">
-                  {result.pagesBase64.map((page, i) => (
-                    <div
-                      key={i}
-                      className="relative"
-                      onDragOver={handlePageDragOver}
-                      onDrop={(e) => handlePageDrop(e, i)}
-                    >
-                      <img
-                        className="w-full rounded-md border"
-                        src={`data:image/png;base64,${page}`}
-                        alt={`Page ${i + 1}`}
-                        onLoad={(e) => handleImageLoad(i, e)}
-                      />
-                      {scales[i] != null &&
-                        result.fields
-                          .filter((f) => f.page === i)
-                          .map((field, j) => (
-                            <PdfFieldOverlay
-                              key={`extracted-${j}`}
-                              field={field}
-                              scale={scales[i]}
-                            />
-                          ))}
-                      {scales[i] != null &&
-                        customFields
-                          .filter((f) => f.page === i)
-                          .map((field) => (
-                            <PdfFieldOverlay
-                              key={field.id}
-                              field={{ ...field, value: null }}
-                              scale={scales[i]}
-                              onDelete={() => deleteCustomField(field.id)}
-                            />
-                          ))}
+                <div className={`mt-6 ${generatedPdfUrl ? "grid grid-cols-2 gap-6" : ""}`}>
+                  <div>
+                    <h3 className="mb-2 text-lg font-semibold">PDF aplati</h3>
+                    <div className="space-y-4">
+                      {result.pagesBase64.map((page, i) => (
+                        <div
+                          key={i}
+                          className="relative"
+                          onDragOver={handlePageDragOver}
+                          onDrop={(e) => handlePageDrop(e, i)}
+                        >
+                          <img
+                            className="w-full rounded-md border"
+                            src={`data:image/png;base64,${page}`}
+                            alt={`Page ${i + 1}`}
+                            onLoad={(e) => handleImageLoad(i, e)}
+                          />
+                          {scales[i] != null &&
+                            result.fields
+                              .filter((f) => f.page === i)
+                              .map((field, j) => (
+                                <PdfFieldOverlay
+                                  key={`extracted-${j}`}
+                                  field={field}
+                                  scale={scales[i]}
+                                />
+                              ))}
+                          {scales[i] != null &&
+                            customFields
+                              .filter((f) => f.page === i)
+                              .map((field) => (
+                                <PdfFieldOverlay
+                                  key={field.id}
+                                  field={{ ...field, value: null }}
+                                  scale={scales[i]}
+                                  onDelete={() => deleteCustomField(field.id)}
+                                />
+                              ))}
+                        </div>
+                      ))}
                     </div>
-                  ))}
+                    {customFields.length > 0 && (
+                      <Button
+                        className="mt-4 w-full"
+                        onClick={generatePdf}
+                        disabled={generating}
+                      >
+                        {generating ? "Generation en cours..." : "Generer le PDF"}
+                      </Button>
+                    )}
+                  </div>
+
+                  {generatedPdfUrl && (
+                    <div>
+                      <h3 className="mb-2 text-lg font-semibold">PDF genere</h3>
+                      <iframe
+                        src={generatedPdfUrl}
+                        className="h-[800px] w-full rounded-md border"
+                        title="PDF genere"
+                      />
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
