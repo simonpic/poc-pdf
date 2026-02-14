@@ -31,7 +31,7 @@ public class PdfFieldExtractorService {
             PDAcroForm acroForm = document.getDocumentCatalog().getAcroForm();
             if (acroForm != null) {
                 for (PDField field : acroForm.getFields()) {
-                    processField(field, fields);
+                    processField(field, fields, document);
                 }
 
                 // Remove field widget annotations from pages
@@ -58,30 +58,54 @@ public class PdfFieldExtractorService {
         }
     }
 
-    private void processField(PDField field, List<PdfField> fields) {
+    private void processField(PDField field, List<PdfField> fields, PDDocument document) {
         if (field instanceof PDNonTerminalField nonTerminal) {
             for (PDField child : nonTerminal.getChildren()) {
-                processField(child, fields);
+                processField(child, fields, document);
             }
             return;
         }
 
-        float x = 0, y = 0;
+        float x = 0, y = 0, width = 0, height = 0;
+        int page = 0;
+        float pageHeight = 0;
         List<PDAnnotationWidget> widgets = field.getWidgets();
         if (widgets != null && !widgets.isEmpty()) {
-            PDRectangle rect = widgets.get(0).getRectangle();
+            PDAnnotationWidget widget = widgets.get(0);
+            PDRectangle rect = widget.getRectangle();
             if (rect != null) {
                 x = rect.getLowerLeftX();
                 y = rect.getLowerLeftY();
+                width = rect.getWidth();
+                height = rect.getHeight();
+            }
+            PDPage widgetPage = widget.getPage();
+            if (widgetPage != null) {
+                page = document.getPages().indexOf(widgetPage);
+                pageHeight = widgetPage.getMediaBox().getHeight();
+            } else {
+                // Fallback: search pages for this widget annotation
+                for (int i = 0; i < document.getNumberOfPages(); i++) {
+                    PDPage p = document.getPage(i);
+                    try {
+                        for (PDAnnotation ann : p.getAnnotations()) {
+                            if (ann.getCOSObject() == widget.getCOSObject()) {
+                                page = i;
+                                pageHeight = p.getMediaBox().getHeight();
+                                break;
+                            }
+                        }
+                    } catch (IOException ignored) {}
+                }
             }
         }
 
         if (field instanceof PDTextField textField) {
-            fields.add(new PdfField(textField.getFullyQualifiedName(), FieldType.TEXT, textField.getValue(), x, y));
+            fields.add(new PdfField(textField.getFullyQualifiedName(), FieldType.TEXT, textField.getValue(), x, y, width, height, page, pageHeight));
         } else if (field instanceof PDCheckBox checkBox) {
-            fields.add(new PdfField(checkBox.getFullyQualifiedName(), FieldType.CHECKBOX, String.valueOf(checkBox.isChecked()), x, y));
+            fields.add(new PdfField(checkBox.getFullyQualifiedName(), FieldType.CHECKBOX, String.valueOf(checkBox.isChecked()), x, y, width, height, page, pageHeight));
         } else if (field instanceof PDRadioButton radioButton) {
-            fields.add(new PdfField(radioButton.getFullyQualifiedName(), FieldType.RADIO, radioButton.getValue(), x, y));
+            fields.add(new PdfField(radioButton.getFullyQualifiedName(), FieldType.RADIO, radioButton.getValue(), x, y, width, height, page, pageHeight));
         }
     }
 }

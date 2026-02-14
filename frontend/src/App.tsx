@@ -1,4 +1,4 @@
-import { useState, useRef, type DragEvent } from "react";
+import { useState, useRef, useCallback, type DragEvent } from "react";
 import {
   Card,
   CardHeader,
@@ -17,6 +17,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { PdfFieldOverlay } from "@/components/PdfFieldOverlay";
 
 interface PdfField {
   name: string;
@@ -24,6 +25,10 @@ interface PdfField {
   value: string | null;
   x: number;
   y: number;
+  width: number;
+  height: number;
+  page: number;
+  pageHeight: number;
 }
 
 interface ExtractionResult {
@@ -40,7 +45,21 @@ function App() {
   const [result, setResult] = useState<ExtractionResult | null>(null);
   const [error, setError] = useState<string>("");
   const [dragOver, setDragOver] = useState(false);
+  const [scales, setScales] = useState<Record<number, number>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const PDF_DPI = 72;
+  const RENDER_DPI = 150;
+  const BASE_SCALE = RENDER_DPI / PDF_DPI;
+
+  const handleImageLoad = useCallback(
+    (pageIndex: number, e: React.SyntheticEvent<HTMLImageElement>) => {
+      const img = e.currentTarget;
+      const displayScale = (img.clientWidth / img.naturalWidth) * BASE_SCALE;
+      setScales((prev) => ({ ...prev, [pageIndex]: displayScale }));
+    },
+    [BASE_SCALE],
+  );
 
   const uploadFile = async (file: File) => {
     setStatus("loading");
@@ -200,12 +219,24 @@ function App() {
             <h3 className="mt-6 mb-2 text-lg font-semibold">PDF aplati</h3>
             <div className="space-y-4">
               {result.pagesBase64.map((page, i) => (
-                <img
-                  key={i}
-                  className="w-full rounded-md border"
-                  src={`data:image/png;base64,${page}`}
-                  alt={`Page ${i + 1}`}
-                />
+                <div key={i} className="relative">
+                  <img
+                    className="w-full rounded-md border"
+                    src={`data:image/png;base64,${page}`}
+                    alt={`Page ${i + 1}`}
+                    onLoad={(e) => handleImageLoad(i, e)}
+                  />
+                  {scales[i] != null &&
+                    result.fields
+                      .filter((f) => f.page === i)
+                      .map((field, j) => (
+                        <PdfFieldOverlay
+                          key={j}
+                          field={field}
+                          scale={scales[i]}
+                        />
+                      ))}
+                </div>
               ))}
             </div>
           </CardContent>
