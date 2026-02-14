@@ -36,6 +36,7 @@ interface CustomField {
   id: string;
   type: "TEXT" | "CHECKBOX" | "RADIO";
   name: string;
+  value: string;
   x: number;
   y: number;
   width: number;
@@ -100,8 +101,8 @@ function App() {
     formData.append(
       "fields",
       JSON.stringify(
-        customFields.map(({ type, name, x, y, width, height, page, pageHeight }) => ({
-          name, type, x, y, width, height, page, pageHeight,
+        customFields.map(({ type, name, value, x, y, width, height, page, pageHeight }) => ({
+          name, type, value, x, y, width, height, page, pageHeight,
         })),
       ),
     );
@@ -217,6 +218,7 @@ function App() {
         id: crypto.randomUUID(),
         type: fieldType,
         name,
+        value: "",
         x: pdfX,
         y: pdfY,
         width: size.width,
@@ -230,6 +232,20 @@ function App() {
   const deleteCustomField = (id: string) => {
     setCustomFields((prev) => prev.filter((f) => f.id !== id));
   };
+
+  const moveCustomField = useCallback((id: string, pdfDx: number, pdfDy: number) => {
+    setCustomFields((prev) =>
+      prev.map((f) =>
+        f.id === id ? { ...f, x: f.x + pdfDx, y: f.y + pdfDy } : f,
+      ),
+    );
+  }, []);
+
+  const updateCustomFieldValue = useCallback((id: string, value: string) => {
+    setCustomFields((prev) =>
+      prev.map((f) => (f.id === id ? { ...f, value } : f)),
+    );
+  }, []);
 
   const typeBadge = (type: string) => {
     switch (type) {
@@ -378,9 +394,11 @@ function App() {
                               .map((field) => (
                                 <PdfFieldOverlay
                                   key={field.id}
-                                  field={{ ...field, value: null }}
+                                  field={{ ...field, value: field.value }}
                                   scale={scales[i]}
                                   onDelete={() => deleteCustomField(field.id)}
+                                  onMove={(dx, dy) => moveCustomField(field.id, dx, dy)}
+                                  onValueChange={(v) => updateCustomFieldValue(field.id, v)}
                                 />
                               ))}
                         </div>

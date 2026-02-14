@@ -65,11 +65,17 @@ public class PdfFieldAdderService {
             case TEXT -> {
                 PDTextField tf = new PDTextField(acroForm);
                 tf.setPartialName(req.name());
+                if (req.value() != null && !req.value().isEmpty()) {
+                    tf.setValue(req.value());
+                }
                 yield tf;
             }
             case CHECKBOX -> {
                 PDCheckBox cb = new PDCheckBox(acroForm);
                 cb.setPartialName(req.name());
+                if ("true".equals(req.value())) {
+                    cb.check();
+                }
                 yield cb;
             }
             case RADIO -> {
