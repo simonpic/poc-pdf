@@ -42,6 +42,17 @@ export function FieldPalette() {
             </TooltipContent>
           </Tooltip>
         ))}
+        <div className="mt-3 border-t pt-3">
+          <p className="mb-1.5 text-xs font-medium text-muted-foreground">Signataires</p>
+          <div className="flex items-center gap-2 text-xs">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-blue-500" />
+            Signataire A
+          </div>
+          <div className="mt-1 flex items-center gap-2 text-xs">
+            <span className="inline-block h-2.5 w-2.5 rounded-full bg-green-500" />
+            Signataire B
+          </div>
+        </div>
       </CardContent>
     </Card>
   );
