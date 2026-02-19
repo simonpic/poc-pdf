@@ -111,8 +111,14 @@ public class WorkflowService {
             }
         }
 
+        // Collect field names belonging to this signer to lock them after signing
+        java.util.Set<String> fieldsToLock = workflow.getFields().stream()
+                .filter(wf -> wf.getAssignedTo() == role)
+                .map(WorkflowField::getFieldName)
+                .collect(java.util.stream.Collectors.toSet());
+
         // Sign the PDF
-        signingService.signForSigner(pdfPath, role, request.fieldValues() != null ? request.fieldValues() : java.util.Map.of());
+        signingService.signForSigner(pdfPath, role, request.fieldValues() != null ? request.fieldValues() : java.util.Map.of(), fieldsToLock);
 
         // Transition state
         if (role == SignerRole.SIGNER_A) {

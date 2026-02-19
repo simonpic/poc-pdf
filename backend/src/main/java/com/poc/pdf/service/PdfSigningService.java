@@ -28,9 +28,7 @@ import java.security.KeyStore;
 import java.security.PrivateKey;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
-import java.util.Arrays;
-import java.util.Calendar;
-import java.util.Map;
+import java.util.*;
 
 @Service
 public class PdfSigningService {
@@ -41,7 +39,7 @@ public class PdfSigningService {
         this.certificateService = certificateService;
     }
 
-    public void signForSigner(Path pdfPath, SignerRole role, Map<String, String> fieldValues) throws Exception {
+    public void signForSigner(Path pdfPath, SignerRole role, Map<String, String> fieldValues, Set<String> fieldsToLock) throws Exception {
         KeyStore.PrivateKeyEntry entry = certificateService.getSignerEntry(role);
         PrivateKey privateKey = entry.getPrivateKey();
         Certificate[] chain = entry.getCertificateChain();
@@ -66,6 +64,14 @@ public class PdfSigningService {
                     } else {
                         cb.unCheck();
                     }
+                }
+            }
+
+            // Set signer's fields as read-only so they can't be modified after signing
+            for (String fieldName : fieldsToLock) {
+                PDField field = acroForm.getField(fieldName);
+                if (field != null) {
+                    field.setReadOnly(true);
                 }
             }
 
